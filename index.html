@@ -173,6 +173,9 @@
   .login-box input { width: 100%; }
   .login-error { color: #b23b3b; font-size: 0.8rem; margin-top: 8px; min-height: 16px; }
   .hidden { display: none !important; }
+  .remaining-ok { color: var(--accent); font-weight: 700; }
+  .remaining-over { color: #b23b3b; font-weight: 700; }
+  .budget-input { width: 100px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--card-bg); color: var(--ink); }
 </style>
 </head>
 <body>
@@ -249,6 +252,31 @@
       <tbody id="userTotalsBody"></tbody>
     </table>
   </div>
+</div>
+
+<div class="card">
+  <div class="row-actions">
+    <h2 style="margin:0;">Monthly Budget Tracker</h2>
+    <div class="field" style="margin:0;">
+      <label for="budgetMonth">Month</label>
+      <input type="month" id="budgetMonth">
+    </div>
+  </div>
+  <div class="btn-row" style="margin-bottom:16px;">
+    <button class="btn-primary" id="saveBudgetsBtn">Save Budgets</button>
+    <span class="option-preview" id="budgetStatus" style="margin-top:0;"></span>
+  </div>
+  <div class="table-scroll" style="max-height:400px;">
+    <table id="budgetTable">
+      <thead><tr><th class="no-sort">Item</th><th class="no-sort">Budget</th><th class="no-sort">Spent</th><th class="no-sort">Remaining</th></tr></thead>
+      <tbody id="budgetBody"></tbody>
+    </table>
+  </div>
+  <h2 style="margin-top:22px;">Remaining by Option</h2>
+  <table id="budgetOptionTable">
+    <thead><tr><th class="no-sort">Option</th><th class="no-sort">Budget</th><th class="no-sort">Spent</th><th class="no-sort">Remaining</th></tr></thead>
+    <tbody id="budgetOptionBody"></tbody>
+  </table>
 </div>
 
 <div class="card">
@@ -467,6 +495,7 @@ function startApp() {
   appStarted = true;
   initFirestore();
   wireEvents();
+  initBudgets();
   renderAll();
 }
 
@@ -526,7 +555,8 @@ function addEntry() {
     date: now.toLocaleDateString(),
     time: now.toLocaleTimeString(),
     user, item, amount,
-    option: OPTION_MAP[item] || ""
+    option: OPTION_MAP[item] || "",
+    month: monthKey(now)
   };
 
   if (firestoreReady) {
@@ -610,12 +640,143 @@ function parseDisplayDate(str) {
   return isNaN(d.getTime()) ? new Date(0) : d;
 }
 
+/* ---------- Budgets ---------- */
+const BUDGETS_KEY = "expense_budgets_v1";
+let budgetsCache = {};
+let budgetsUnsub = null;
+
+function monthKey(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+function entryMonth(entry) {
+  return entry.month || monthKey(parseDisplayDate(entry.date));
+}
+function currentMonthValue() {
+  const el = document.getElementById("budgetMonth");
+  return el.value || monthKey(new Date());
+}
+
+function loadBudgetsLocal(month) {
+  try {
+    const raw = localStorage.getItem(BUDGETS_KEY);
+    const all = raw ? JSON.parse(raw) : {};
+    return all[month] || {};
+  } catch (e) { return {}; }
+}
+function saveBudgetsLocal(month, data) {
+  try {
+    const raw = localStorage.getItem(BUDGETS_KEY);
+    const all = raw ? JSON.parse(raw) : {};
+    all[month] = data;
+    localStorage.setItem(BUDGETS_KEY, JSON.stringify(all));
+  } catch (e) {}
+}
+
+function subscribeBudgets(month) {
+  if (budgetsUnsub) { budgetsUnsub(); budgetsUnsub = null; }
+  const status = document.getElementById("budgetStatus");
+  if (firestoreReady) {
+    budgetsUnsub = db.collection("budgets").doc(month).onSnapshot((doc) => {
+      budgetsCache = doc.exists ? doc.data() : {};
+      status.textContent = "Synced for " + month;
+      renderBudgets();
+    }, (err) => {
+      status.textContent = "Budget sync error: " + err.message;
+    });
+  } else {
+    budgetsCache = loadBudgetsLocal(month);
+    status.textContent = "Local storage only";
+    renderBudgets();
+  }
+}
+
+function saveBudgets() {
+  const month = currentMonthValue();
+  const data = {};
+  document.querySelectorAll(".budget-input").forEach(input => {
+    const val = input.value;
+    if (val !== "") data[input.dataset.item] = parseFloat(val);
+  });
+  if (firestoreReady) {
+    db.collection("budgets").doc(month).set(data)
+      .then(() => showToast("Budgets saved for " + month))
+      .catch(err => showToast("Could not save budgets: " + err.message, true));
+  } else {
+    saveBudgetsLocal(month, data);
+    budgetsCache = data;
+    renderBudgets();
+    showToast("Budgets saved for " + month);
+  }
+}
+
+function renderBudgets() {
+  const month = currentMonthValue();
+  const entries = loadEntries().filter(e => entryMonth(e) === month);
+
+  const spentByItem = {};
+  ITEMS.forEach(i => spentByItem[i] = 0);
+  entries.forEach(e => {
+    const amt = parseFloat(e.amount);
+    if (!isNaN(amt)) spentByItem[e.item] = (spentByItem[e.item] || 0) + amt;
+  });
+
+  const tbody = document.getElementById("budgetBody");
+  tbody.innerHTML = "";
+  ITEMS.forEach(item => {
+    const budget = budgetsCache[item] !== undefined ? budgetsCache[item] : "";
+    const spent = spentByItem[item] || 0;
+    const remaining = (budget === "" ? 0 : budget) - spent;
+    const remClass = remaining < 0 ? "remaining-over" : "remaining-ok";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${item}</td>
+      <td><input type="number" step="any" class="budget-input" data-item="${item}" value="${budget}"></td>
+      <td>${spent}</td>
+      <td class="${remClass}">${budget === "" ? "—" : remaining}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const optBudget = {}, optSpent = {};
+  OPTION_ORDER.forEach(o => { optBudget[o] = 0; optSpent[o] = 0; });
+  ITEMS.forEach(item => {
+    const opt = OPTION_MAP[item];
+    if (!opt) return;
+    if (budgetsCache[item] !== undefined) optBudget[opt] += parseFloat(budgetsCache[item]) || 0;
+    optSpent[opt] += spentByItem[item] || 0;
+  });
+
+  const optBody = document.getElementById("budgetOptionBody");
+  optBody.innerHTML = "";
+  OPTION_ORDER.forEach(opt => {
+    const remaining = optBudget[opt] - optSpent[opt];
+    const remClass = remaining < 0 ? "remaining-over" : "remaining-ok";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><span class="badge ${badgeClass(opt)}">${opt}</span></td>
+      <td>${optBudget[opt]}</td>
+      <td>${optSpent[opt]}</td>
+      <td class="${remClass}">${remaining}</td>
+    `;
+    optBody.appendChild(tr);
+  });
+}
+
+function initBudgets() {
+  const monthInput = document.getElementById("budgetMonth");
+  monthInput.value = monthKey(new Date());
+  subscribeBudgets(monthInput.value);
+  monthInput.addEventListener("change", () => subscribeBudgets(monthInput.value));
+  document.getElementById("saveBudgetsBtn").addEventListener("click", saveBudgets);
+}
+
 /* ---------- Rendering ---------- */
 function renderAll() {
   renderTotals();
   renderUserTotals();
   renderCharts();
   renderEntries();
+  renderBudgets();
 }
 
 function renderTotals() {
