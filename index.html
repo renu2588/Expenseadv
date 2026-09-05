@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Expense Transaction Entry</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2f5d50">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="firebase-config.js"></script>
+<style>
+  :root {
+    --ink: #1c2b28;
+    --paper: #f6f4ee;
+    --card-bg: #ffffff;
+    --line: #cfc9ba;
+    --accent: #2f5d50;
+    --accent-soft: #e4ede9;
+    --mandatory: #2f5d50;
+    --nonmandatory: #7a6a3a;
+    --timki: #7a4a3a;
+    --loan: #6a3a5a;
+    --saving: #2f4a6a;
+    --muted: #5a6663;
+  }
+  [data-theme="dark"] {
+    --ink: #ecf1ee;
+    --paper: #14201c;
+    --card-bg: #1c2b26;
+    --line: #33433c;
+    --accent: #5fae97;
+    --accent-soft: #223a32;
+    --muted: #9db0a9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    padding: 20px;
+    transition: background 0.2s, color 0.2s;
+  }
+  h1 { font-size: 1.35rem; font-weight: 600; margin: 0; }
+  h2 { font-size: 1.02rem; font-weight: 600; margin: 0 0 14px 0; }
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1100px;
+    margin: 0 auto 6px auto;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .subtitle { color: var(--muted); font-size: 0.85rem; margin-bottom: 18px; max-width: 1100px; margin-left: auto; margin-right: auto; }
+  .icon-btn {
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--accent-soft); }
+  .status-pill {
+    font-size: 0.75rem;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 20px;
+    margin: 0 auto 22px auto;
+    max-width: 1100px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    max-width: 1100px;
+    margin: 0 auto 22px auto;
+  }
+  @media (max-width: 800px) { .grid-2 { grid-template-columns: 1fr; } }
+  .form-row { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  label { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+  select, input[type="number"], input[type="text"], input[type="date"], input[type="email"], input[type="password"] {
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    font-size: 0.9rem;
+    background: var(--card-bg);
+    color: var(--ink);
+    min-width: 180px;
+  }
+  input[type="number"] { min-width: 140px; }
+  .option-preview { font-size: 0.85rem; color: var(--muted); min-height: 20px; margin-top: 10px; }
+  button {
+    border: none;
+    border-radius: 5px;
+    padding: 10px 18px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .btn-outline:hover { background: var(--accent-soft); }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.87rem; }
+  th, td { padding: 8px 9px; border-bottom: 1px solid var(--line); text-align: left; }
+  th { background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 0.76rem; cursor: pointer; user-select: none; white-space: nowrap; }
+  th.no-sort { cursor: default; }
+  th .arrow { font-size: 0.7rem; opacity: 0.6; }
+  tr:hover td { background: var(--accent-soft); }
+  .table-scroll { max-height: 440px; overflow-y: auto; border: 1px solid var(--line); border-radius: 5px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.75rem; color: #fff; white-space: nowrap; }
+  .badge-mandatory { background: var(--mandatory); }
+  .badge-nonmandatory { background: var(--nonmandatory); }
+  .badge-timki { background: var(--timki); }
+  .badge-loan { background: var(--loan); }
+  .badge-saving1, .badge-saving2 { background: var(--saving); }
+  .empty-msg { color: var(--muted); font-size: 0.86rem; padding: 12px 4px; }
+  .row-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+  .delete-btn, .edit-btn, .save-edit-btn {
+    background: none; border: none; font-size: 0.8rem; cursor: pointer; padding: 2px 6px; font-weight: 600;
+  }
+  .delete-btn { color: #b23b3b; }
+  .edit-btn, .save-edit-btn { color: var(--accent); }
+  .delete-btn:hover, .edit-btn:hover, .save-edit-btn:hover { text-decoration: underline; }
+  .filter-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; align-items: flex-end; }
+  .subtotal-bar {
+    display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.85rem; color: var(--muted);
+    margin-bottom: 12px; padding: 8px 12px; background: var(--accent-soft); border-radius: 5px;
+  }
+  .subtotal-bar b { color: var(--ink); }
+  canvas { max-width: 100%; }
+  .chart-wrap { position: relative; height: 260px; }
+  .edit-input { width: 100px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 4px; }
+  #toastContainer {
+    position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 999;
+  }
+  .toast {
+    background: var(--accent); color: #fff; padding: 10px 16px; border-radius: 6px;
+    font-size: 0.85rem; box-shadow: 0 2px 10px rgba(0,0,0,0.15); opacity: 0; transform: translateY(10px);
+    transition: opacity 0.25s, transform 0.25s;
+  }
+  .toast.error { background: #b23b3b; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  #loginOverlay {
+    position: fixed; inset: 0; background: var(--paper); z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .login-box {
+    background: var(--card-bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: 30px; width: 320px; max-width: 90vw;
+  }
+  .login-box h1 { margin-bottom: 6px; font-size: 1.2rem; }
+  .login-box .field { margin-bottom: 14px; width: 100%; }
+  .login-box input { width: 100%; }
+  .login-error { color: #b23b3b; font-size: 0.8rem; margin-top: 8px; min-height: 16px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="toastContainer"></div>
+
+<div id="loginOverlay" class="hidden">
+  <div class="login-box">
+    <h1>Expense Transaction Entry</h1>
+    <div class="subtitle" style="margin-bottom:20px;">Sign in to continue.</div>
+    <div class="field">
+      <label for="loginEmail">Email</label>
+      <input type="email" id="loginEmail" placeholder="you@example.com">
+    </div>
+    <div class="field">
+      <label for="loginPassword">Password</label>
+      <input type="password" id="loginPassword" placeholder="Password">
+    </div>
+    <button class="btn-primary" id="loginBtn" style="width:100%;">Sign In</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<div id="appRoot" class="hidden">
+
+<div class="top-bar">
+  <h1>Expense Transaction Entry</h1>
+  <div class="btn-row" style="align-items:center;">
+    <span class="status-pill" id="syncStatus">Connecting...</span>
+    <button class="icon-btn" id="themeToggle">🌙 Theme</button>
+    <button class="icon-btn hidden" id="logoutBtn">Sign Out</button>
+  </div>
+</div>
+<div class="subtitle">Select an item, enter the amount, and add it to the record.</div>
+
+<div class="card">
+  <div class="form-row">
+    <div class="field">
+      <label for="userSelect">Entered By</label>
+      <select id="userSelect">
+        <option value="User 1">User 1</option>
+        <option value="User 2">User 2</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="itemSelect">Item</label>
+      <select id="itemSelect"></select>
+    </div>
+    <div class="field">
+      <label for="amountInput">Amount</label>
+      <input type="number" id="amountInput" step="any" placeholder="Enter amount">
+    </div>
+    <div class="field">
+      <button class="btn-primary" id="addBtn">Add Entry</button>
+    </div>
+  </div>
+  <div class="option-preview" id="optionPreview"></div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2>Totals by Option</h2>
+    <div class="chart-wrap"><canvas id="optionChart"></canvas></div>
+    <table id="totalsTable" style="margin-top:14px;">
+      <thead><tr><th class="no-sort">Option</th><th class="no-sort">Total</th></tr></thead>
+      <tbody id="totalsBody"></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2>Totals by User</h2>
+    <div class="chart-wrap"><canvas id="userChart"></canvas></div>
+    <table id="userTotalsTable" style="margin-top:14px;">
+      <thead><tr><th class="no-sort">User</th><th class="no-sort">Total</th></tr></thead>
+      <tbody id="userTotalsBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row-actions">
+    <h2 style="margin:0;">Saved Entries</h2>
+    <div class="btn-row">
+      <button class="btn-outline" id="downloadCsvBtn">Download CSV</button>
+      <button class="btn-outline" id="downloadXlsxBtn">Download Excel</button>
+    </div>
+  </div>
+
+  <div class="filter-row">
+    <div class="field">
+      <label for="searchInput">Search item</label>
+      <input type="text" id="searchInput" placeholder="e.g. Rent">
+    </div>
+    <div class="field">
+      <label for="filterUser">User</label>
+      <select id="filterUser"><option value="">All</option><option value="User 1">User 1</option><option value="User 2">User 2</option></select>
+    </div>
+    <div class="field">
+      <label for="filterOption">Option</label>
+      <select id="filterOption"><option value="">All</option></select>
+    </div>
+    <div class="field">
+      <label for="filterFrom">From</label>
+      <input type="date" id="filterFrom">
+    </div>
+    <div class="field">
+      <label for="filterTo">To</label>
+      <input type="date" id="filterTo">
+    </div>
+    <div class="field">
+      <button class="btn-outline" id="clearFiltersBtn">Clear</button>
+    </div>
+  </div>
+
+  <div class="subtotal-bar" id="subtotalBar"></div>
+
+  <div class="table-scroll">
+    <table id="recordsTable">
+      <thead>
+        <tr>
+          <th data-key="date">Date <span class="arrow"></span></th>
+          <th data-key="time">Time <span class="arrow"></span></th>
+          <th data-key="user">Entered By <span class="arrow"></span></th>
+          <th data-key="item">Item <span class="arrow"></span></th>
+          <th data-key="amount">Amount <span class="arrow"></span></th>
+          <th data-key="option">Option <span class="arrow"></span></th>
+          <th class="no-sort"></th>
+        </tr>
+      </thead>
+      <tbody id="recordsBody"></tbody>
+    </table>
+  </div>
+  <div id="emptyMsg" class="empty-msg">No entries saved yet.</div>
+</div>
+
+</div>
+
+<script>
+const ITEMS = [
+  "Rent","Mobile bill","Internet+DTH","Light Bill","Petrol","Filter","Milk",
+  "Cash Devghar","Cash Home","Cash Teju Renu","Credit card","Renu Others","Mom",
+  "Donate","PPF Renu","Paper","Loan Personal","MF Renu","Cash Mavshi 1",
+  "Cash Mavshi 2","Teju RD","Grossories","Teju PPF","Anika daycare",
+  "Sarthak Jiju","Teju Others","Anika School","Loan","Down Payment",
+  "Saving 1","Saving 2","Others","Renu deposit","Teju Deposit"
+];
+
+const OPTION_MAP = {
+  "Rent":"Mandatory","Mobile bill":"Mandatory","Internet+DTH":"Mandatory",
+  "Light Bill":"Mandatory","Petrol":"Mandatory","Filter":"Mandatory",
+  "Cash Devghar":"Mandatory","Cash Home":"Mandatory","Cash Teju Renu":"Mandatory",
+  "Credit card":"Mandatory","Renu Others":"Mandatory","Mom":"Mandatory",
+  "Donate":"Mandatory","PPF Renu":"Mandatory","Paper":"Mandatory",
+  "Loan Personal":"Mandatory","MF Renu":"Mandatory","Cash Mavshi 1":"Mandatory",
+  "Cash Mavshi 2":"Mandatory",
+  "Milk":"Non mandatory","Teju RD":"Non mandatory","Grossories":"Non mandatory",
+  "Teju PPF":"Non mandatory","Anika daycare":"Non mandatory",
+  "Sarthak Jiju":"Non mandatory","Teju Others":"Non mandatory",
+  "Anika School":"Timki",
+  "Loan":"Loan","Down Payment":"Loan",
+  "Saving 1":"Saving 1",
+  "Saving 2":"Saving 2"
+};
+
+const OPTION_ORDER = ["Mandatory","Non mandatory","Timki","Loan","Saving 1","Saving 2"];
+const OPTION_COLORS = {
+  "Mandatory":"#2f5d50","Non mandatory":"#7a6a3a","Timki":"#7a4a3a",
+  "Loan":"#6a3a5a","Saving 1":"#2f4a6a","Saving 2":"#4a70a8"
+};
+
+const STORAGE_KEY = "expense_entries_v2";
+const THEME_KEY = "expense_theme";
+
+let db = null, auth = null;
+let entriesCache = [];
+let firestoreReady = false;
+let authRequired = false;
+let optionChart = null, userChart = null;
+let sortKey = "date", sortDir = "desc";
+
+/* ---------- Toasts ---------- */
+function showToast(message, isError) {
+  const container = document.getElementById("toastContainer");
+  const el = document.createElement("div");
+  el.className = "toast" + (isError ? " error" : "");
+  el.textContent = message;
+  container.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 300);
+  }, 3200);
+}
+
+/* ---------- Theme ---------- */
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY) || "light";
+  document.documentElement.setAttribute("data-theme", saved);
+  document.getElementById("themeToggle").textContent = saved === "dark" ? "☀️ Theme" : "🌙 Theme";
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme") || "light";
+  const next = current === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem(THEME_KEY, next);
+  document.getElementById("themeToggle").textContent = next === "dark" ? "☀️ Theme" : "🌙 Theme";
+  renderCharts();
+}
+
+/* ---------- Badge helper ---------- */
+function badgeClass(option) {
+  switch(option) {
+    case "Mandatory": return "badge-mandatory";
+    case "Non mandatory": return "badge-nonmandatory";
+    case "Timki": return "badge-timki";
+    case "Loan": return "badge-loan";
+    case "Saving 1": return "badge-saving1";
+    case "Saving 2": return "badge-saving2";
+    default: return "";
+  }
+}
+
+/* ---------- Item select + preview ---------- */
+function populateItemSelect() {
+  const select = document.getElementById("itemSelect");
+  ITEMS.forEach(item => {
+    const opt = document.createElement("option");
+    opt.value = item;
+    opt.textContent = item;
+    select.appendChild(opt);
+  });
+}
+function populateOptionFilter() {
+  const select = document.getElementById("filterOption");
+  OPTION_ORDER.forEach(opt => {
+    const o = document.createElement("option");
+    o.value = opt; o.textContent = opt;
+    select.appendChild(o);
+  });
+}
+function updateOptionPreview() {
+  const item = document.getElementById("itemSelect").value;
+  const option = OPTION_MAP[item] || "";
+  const preview = document.getElementById("optionPreview");
+  preview.innerHTML = option
+    ? `Option: <span class="badge ${badgeClass(option)}">${option}</span>`
+    : "Option: (none for this item)";
+}
+
+/* ---------- Auth ---------- */
+function initAuth() {
+  if (typeof firebaseConfig === "undefined" || firebaseConfig.apiKey === "YOUR_API_KEY") {
+    // No Firebase configured at all -> skip auth, go straight to local-only app
+    document.getElementById("appRoot").classList.remove("hidden");
+    startApp();
+    return;
+  }
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
+  authRequired = true;
+
+  auth.onAuthStateChanged((user) => {
+    if (user) {
+      document.getElementById("loginOverlay").classList.add("hidden");
+      document.getElementById("appRoot").classList.remove("hidden");
+      document.getElementById("logoutBtn").classList.remove("hidden");
+      startApp();
+    } else {
+      document.getElementById("loginOverlay").classList.remove("hidden");
+      document.getElementById("appRoot").classList.add("hidden");
+    }
+  });
+
+  document.getElementById("loginBtn").addEventListener("click", () => {
+    const email = document.getElementById("loginEmail").value.trim();
+    const password = document.getElementById("loginPassword").value;
+    const errorEl = document.getElementById("loginError");
+    errorEl.textContent = "";
+    if (!email || !password) { errorEl.textContent = "Enter email and password."; return; }
+    auth.signInWithEmailAndPassword(email, password).catch(err => {
+      errorEl.textContent = err.message;
+    });
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    auth.signOut();
+  });
+}
+
+let appStarted = false;
+function startApp() {
+  if (appStarted) return;
+  appStarted = true;
+  initFirestore();
+  wireEvents();
+  renderAll();
+}
+
+/* ---------- Firestore ---------- */
+function initFirestore() {
+  const status = document.getElementById("syncStatus");
+  try {
+    if (typeof firebaseConfig === "undefined" || firebaseConfig.apiKey === "YOUR_API_KEY") {
+      status.textContent = "Local storage only";
+      return;
+    }
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    try { db.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch(e) {}
+    firestoreReady = true;
+    status.textContent = "Syncing...";
+
+    db.collection("entries").orderBy("createdAt", "asc")
+      .onSnapshot((snapshot) => {
+        entriesCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(entriesCache));
+        renderAll();
+        status.textContent = navigator.onLine ? "Synced live" : "Offline — will sync when online";
+      }, (err) => {
+        status.textContent = "Sync error";
+        showToast("Sync error: " + err.message, true);
+      });
+  } catch (e) {
+    status.textContent = "Local storage only";
+  }
+  window.addEventListener("online", () => { document.getElementById("syncStatus").textContent = "Synced live"; });
+  window.addEventListener("offline", () => { document.getElementById("syncStatus").textContent = "Offline — will sync when online"; });
+}
+
+function loadEntries() {
+  if (firestoreReady) return entriesCache;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+function saveEntriesLocal(entries) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+}
+
+/* ---------- Add / Edit / Delete ---------- */
+function addEntry() {
+  const item = document.getElementById("itemSelect").value;
+  const amount = document.getElementById("amountInput").value;
+  const user = document.getElementById("userSelect").value;
+
+  if (!item) { showToast("Please select an item.", true); return; }
+  if (amount === "" || isNaN(parseFloat(amount))) { showToast("Please enter a valid amount.", true); return; }
+
+  const now = new Date();
+  const entry = {
+    date: now.toLocaleDateString(),
+    time: now.toLocaleTimeString(),
+    user, item, amount,
+    option: OPTION_MAP[item] || ""
+  };
+
+  if (firestoreReady) {
+    db.collection("entries").add({ ...entry, createdAt: firebase.firestore.FieldValue.serverTimestamp() })
+      .then(() => showToast("Entry added"))
+      .catch(err => showToast("Could not save: " + err.message, true));
+  } else {
+    const entries = loadEntries();
+    entries.push(entry);
+    saveEntriesLocal(entries);
+    renderAll();
+    showToast("Entry added");
+  }
+  document.getElementById("amountInput").value = "";
+  document.getElementById("amountInput").focus();
+}
+
+function deleteEntry(id, index) {
+  if (firestoreReady && id) {
+    db.collection("entries").doc(id).delete()
+      .then(() => showToast("Entry removed"))
+      .catch(err => showToast("Could not delete: " + err.message, true));
+  } else {
+    const entries = loadEntries();
+    entries.splice(index, 1);
+    saveEntriesLocal(entries);
+    renderAll();
+    showToast("Entry removed");
+  }
+}
+
+function updateEntryAmount(id, index, newAmount) {
+  if (isNaN(parseFloat(newAmount))) { showToast("Invalid amount", true); return; }
+  if (firestoreReady && id) {
+    db.collection("entries").doc(id).update({ amount: newAmount })
+      .then(() => showToast("Entry updated"))
+      .catch(err => showToast("Could not update: " + err.message, true));
+  } else {
+    const entries = loadEntries();
+    entries[index].amount = newAmount;
+    saveEntriesLocal(entries);
+    renderAll();
+    showToast("Entry updated");
+  }
+}
+
+/* ---------- Filtering & sorting ---------- */
+function getFilteredEntries() {
+  const search = document.getElementById("searchInput").value.trim().toLowerCase();
+  const userF = document.getElementById("filterUser").value;
+  const optF = document.getElementById("filterOption").value;
+  const from = document.getElementById("filterFrom").value;
+  const to = document.getElementById("filterTo").value;
+
+  let entries = loadEntries().filter(e => {
+    if (search && !e.item.toLowerCase().includes(search)) return false;
+    if (userF && e.user !== userF) return false;
+    if (optF && e.option !== optF) return false;
+    if (from || to) {
+      const d = parseDisplayDate(e.date);
+      if (from && d < new Date(from)) return false;
+      if (to && d > new Date(to + "T23:59:59")) return false;
+    }
+    return true;
+  });
+
+  entries.sort((a, b) => {
+    let va = a[sortKey], vb = b[sortKey];
+    if (sortKey === "amount") { va = parseFloat(va) || 0; vb = parseFloat(vb) || 0; }
+    else if (sortKey === "date") { va = parseDisplayDate(a.date + " " + a.time); vb = parseDisplayDate(b.date + " " + b.time); }
+    else { va = (va || "").toString().toLowerCase(); vb = (vb || "").toString().toLowerCase(); }
+    if (va < vb) return sortDir === "asc" ? -1 : 1;
+    if (va > vb) return sortDir === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  return entries;
+}
+function parseDisplayDate(str) {
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? new Date(0) : d;
+}
+
+/* ---------- Rendering ---------- */
+function renderAll() {
+  renderTotals();
+  renderUserTotals();
+  renderCharts();
+  renderEntries();
+}
+
+function renderTotals() {
+  const entries = loadEntries();
+  const totals = {};
+  OPTION_ORDER.forEach(opt => totals[opt] = 0);
+  entries.forEach(e => {
+    const amt = parseFloat(e.amount);
+    if (e.option && !isNaN(amt)) totals[e.option] = (totals[e.option] || 0) + amt;
+  });
+  const tbody = document.getElementById("totalsBody");
+  tbody.innerHTML = "";
+  OPTION_ORDER.forEach(opt => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><span class="badge ${badgeClass(opt)}">${opt}</span></td><td>${totals[opt]}</td>`;
+    tbody.appendChild(tr);
+  });
+  return totals;
+}
+
+function renderUserTotals() {
+  const entries = loadEntries();
+  const totals = { "User 1": 0, "User 2": 0 };
+  entries.forEach(e => {
+    const amt = parseFloat(e.amount);
+    if (e.user && !isNaN(amt)) totals[e.user] = (totals[e.user] || 0) + amt;
+  });
+  const tbody = document.getElementById("userTotalsBody");
+  tbody.innerHTML = "";
+  Object.keys(totals).forEach(u => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${u}</td><td>${totals[u]}</td>`;
+    tbody.appendChild(tr);
+  });
+  return totals;
+}
+
+function renderCharts() {
+  const entries = loadEntries();
+  const optTotals = {};
+  OPTION_ORDER.forEach(o => optTotals[o] = 0);
+  const userTotals = { "User 1": 0, "User 2": 0 };
+  entries.forEach(e => {
+    const amt = parseFloat(e.amount);
+    if (!isNaN(amt)) {
+      if (e.option) optTotals[e.option] = (optTotals[e.option] || 0) + amt;
+      if (e.user) userTotals[e.user] = (userTotals[e.user] || 0) + amt;
+    }
+  });
+
+  const textColor = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim();
+
+  const optCtx = document.getElementById("optionChart");
+  if (optionChart) optionChart.destroy();
+  optionChart = new Chart(optCtx, {
+    type: "pie",
+    data: {
+      labels: OPTION_ORDER,
+      datasets: [{ data: OPTION_ORDER.map(o => optTotals[o]), backgroundColor: OPTION_ORDER.map(o => OPTION_COLORS[o]) }]
+    },
+    options: { plugins: { legend: { labels: { color: textColor, font: { size: 11 } } } } }
+  });
+
+  const userCtx = document.getElementById("userChart");
+  if (userChart) userChart.destroy();
+  userChart = new Chart(userCtx, {
+    type: "bar",
+    data: {
+      labels: Object.keys(userTotals),
+      datasets: [{ label: "Total", data: Object.values(userTotals), backgroundColor: ["#2f5d50", "#4a70a8"] }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: textColor } },
+        y: { ticks: { color: textColor } }
+      }
+    }
+  });
+}
+
+function renderEntries() {
+  const allEntries = loadEntries();
+  const filtered = getFilteredEntries();
+  const tbody = document.getElementById("recordsBody");
+  const emptyMsg = document.getElementById("emptyMsg");
+  tbody.innerHTML = "";
+
+  // subtotal bar
+  const subtotalBar = document.getElementById("subtotalBar");
+  const sum = filtered.reduce((acc, e) => acc + (parseFloat(e.amount) || 0), 0);
+  subtotalBar.innerHTML = `<span>Showing <b>${filtered.length}</b> of <b>${allEntries.length}</b> entries</span><span>Subtotal: <b>${sum}</b></span>`;
+
+  if (filtered.length === 0) {
+    emptyMsg.style.display = "block";
+    emptyMsg.textContent = allEntries.length === 0 ? "No entries saved yet." : "No entries match the current filters.";
+    return;
+  }
+  emptyMsg.style.display = "none";
+
+  filtered.forEach((entry) => {
+    const realIndex = allEntries.indexOf(entry);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${entry.date}</td>
+      <td>${entry.time}</td>
+      <td>${entry.user || ""}</td>
+      <td>${entry.item}</td>
+      <td class="amount-cell">${entry.amount}</td>
+      <td>${entry.option ? `<span class="badge ${badgeClass(entry.option)}">${entry.option}</span>` : ""}</td>
+      <td>
+        <button class="edit-btn" data-id="${entry.id || ""}" data-index="${realIndex}">Edit</button>
+        <button class="delete-btn" data-id="${entry.id || ""}" data-index="${realIndex}">Remove</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll(".delete-btn").forEach(btn => {
+    btn.addEventListener("click", () => deleteEntry(btn.dataset.id, parseInt(btn.dataset.index, 10)));
+  });
+
+  tbody.querySelectorAll(".edit-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tr = btn.closest("tr");
+      const amountCell = tr.querySelector(".amount-cell");
+      const currentValue = amountCell.textContent;
+      amountCell.innerHTML = `<input type="number" step="any" class="edit-input" value="${currentValue}">`;
+      btn.textContent = "Save";
+      btn.classList.add("save-edit-btn");
+      btn.classList.remove("edit-btn");
+      btn.replaceWith(btn.cloneNode(true)); // strip old listener
+      const newBtn = tr.querySelector("button:not(.delete-btn)");
+      newBtn.addEventListener("click", () => {
+        const input = amountCell.querySelector("input");
+        updateEntryAmount(btn.dataset.id, parseInt(btn.dataset.index, 10), input.value);
+      });
+    });
+  });
+}
+
+/* ---------- Export ---------- */
+function csvEscape(value) {
+  const str = String(value);
+  if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+  return str;
+}
+function downloadCSV() {
+  const entries = getFilteredEntries();
+  if (entries.length === 0) { showToast("No entries to export.", true); return; }
+  const lines = [["Date","Time","Entered By","Item","Amount","Option"].map(csvEscape).join(",")];
+  entries.forEach(e => lines.push([e.date, e.time, e.user||"", e.item, e.amount, e.option].map(csvEscape).join(",")));
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "expense_entries.csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function downloadXLSX() {
+  const entries = getFilteredEntries();
+  if (entries.length === 0) { showToast("No entries to export.", true); return; }
+  const data = entries.map(e => ({
+    Date: e.date, Time: e.time, "Entered By": e.user || "", Item: e.item, Amount: e.amount, Option: e.option
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Entries");
+  XLSX.writeFile(wb, "expense_entries.xlsx");
+}
+
+/* ---------- Wire up events ---------- */
+function wireEvents() {
+  document.getElementById("itemSelect").addEventListener("change", updateOptionPreview);
+  document.getElementById("addBtn").addEventListener("click", addEntry);
+  document.getElementById("downloadCsvBtn").addEventListener("click", downloadCSV);
+  document.getElementById("downloadXlsxBtn").addEventListener("click", downloadXLSX);
+  document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+
+  ["searchInput","filterUser","filterOption","filterFrom","filterTo"].forEach(id => {
+    document.getElementById(id).addEventListener("input", renderEntries);
+    document.getElementById(id).addEventListener("change", renderEntries);
+  });
+  document.getElementById("clearFiltersBtn").addEventListener("click", () => {
+    document.getElementById("searchInput").value = "";
+    document.getElementById("filterUser").value = "";
+    document.getElementById("filterOption").value = "";
+    document.getElementById("filterFrom").value = "";
+    document.getElementById("filterTo").value = "";
+    renderEntries();
+  });
+
+  document.querySelectorAll("#recordsTable th[data-key]").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.key;
+      if (sortKey === key) sortDir = sortDir === "asc" ? "desc" : "asc";
+      else { sortKey = key; sortDir = "asc"; }
+      document.querySelectorAll("#recordsTable th .arrow").forEach(a => a.textContent = "");
+      th.querySelector(".arrow").textContent = sortDir === "asc" ? "▲" : "▼";
+      renderEntries();
+    });
+  });
+}
+
+/* ---------- Boot ---------- */
+populateItemSelect();
+populateOptionFilter();
+updateOptionPreview();
+initTheme();
+initAuth();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
+</script>
+
+</body>
+</html>
