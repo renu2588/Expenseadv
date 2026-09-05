@@ -1,4 +1,4 @@
-const CACHE_NAME = "expense-app-cache-v2";
+const CACHE_NAME = "expense-app-cache-v3";
 const FILES_TO_CACHE = ["./index.html", "./manifest.json", "./firebase-config.js"];
 
 self.addEventListener("install", (event) => {
@@ -16,11 +16,18 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Network-first: always try to fetch the latest version first.
+// Only fall back to the cached copy if the network request fails (e.g. offline).
 self.addEventListener("fetch", (event) => {
-  // Network-first for CDN/API calls, cache-first for local app shell
-  if (event.request.url.includes(self.location.origin)) {
+  if (event.request.url.startsWith(self.location.origin)) {
     event.respondWith(
-      caches.match(event.request).then((cached) => cached || fetch(event.request))
+      fetch(event.request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(() => caches.match(event.request))
     );
   }
 });
