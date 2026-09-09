@@ -276,13 +276,21 @@
     </div>
     <div class="field">
       <label for="amountInput">Amount</label>
-      <input type="number" id="amountInput" step="any" placeholder="Enter amount">
+      <div style="display:flex; gap:6px;">
+        <input type="number" id="amountInput" step="any" placeholder="Enter amount" style="min-width:120px;">
+        <button type="button" class="icon-btn" id="voiceBtn" title="Speak the amount">🎤</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="remarkInput">Remark (optional)</label>
+      <input type="text" id="remarkInput" placeholder="e.g. Diwali gift">
     </div>
     <div class="field">
       <button class="btn-primary" id="addBtn">Add Entry</button>
     </div>
   </div>
   <div class="option-preview" id="optionPreview"></div>
+  <div class="option-preview" id="voiceStatus"></div>
 </div>
 
 <div class="grid-2">
@@ -305,6 +313,11 @@
 </div>
 
 <div class="card">
+  <h2>Monthly Trend</h2>
+  <div class="chart-wrap" style="height:280px;"><canvas id="trendChart"></canvas></div>
+</div>
+
+<div class="card">
   <div class="row-actions">
     <h2 style="margin:0;">Monthly Budget Tracker</h2>
     <div class="field" style="margin:0;">
@@ -314,6 +327,7 @@
   </div>
   <div class="btn-row" style="margin-bottom:16px;">
     <button class="btn-primary" id="saveBudgetsBtn">Save Budgets</button>
+    <button class="btn-outline" id="downloadPdfBtn">Download PDF Report</button>
     <span class="option-preview" id="budgetStatus" style="margin-top:0;"></span>
   </div>
   <div class="table-scroll" style="max-height:400px;">
@@ -376,6 +390,7 @@
           <th data-key="item">Item <span class="arrow"></span></th>
           <th data-key="amount">Amount <span class="arrow"></span></th>
           <th data-key="option">Option <span class="arrow"></span></th>
+          <th class="no-sort">Remark</th>
           <th class="no-sort"></th>
         </tr>
       </thead>
@@ -427,7 +442,7 @@ let db = null, auth = null;
 let entriesCache = [];
 let firestoreReady = false;
 let authRequired = false;
-let optionChart = null, userChart = null;
+let optionChart = null, userChart = null, trendChart = null;
 let sortKey = "date", sortDir = "desc";
 
 /* ---------- Toasts ---------- */
@@ -460,6 +475,12 @@ function toggleTheme() {
 }
 
 /* ---------- Badge helper ---------- */
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 function badgeClass(option) {
   switch(option) {
     case "Mandatory": return "badge-mandatory";
@@ -596,6 +617,7 @@ function addEntry() {
   const item = document.getElementById("itemSelect").value;
   const amount = document.getElementById("amountInput").value;
   const user = document.getElementById("userSelect").value;
+  const remark = document.getElementById("remarkInput").value.trim();
 
   if (!item) { showToast("Please select an item.", true); return; }
   if (amount === "" || isNaN(parseFloat(amount))) { showToast("Please enter a valid amount.", true); return; }
@@ -604,7 +626,7 @@ function addEntry() {
   const entry = {
     date: now.toLocaleDateString(),
     time: now.toLocaleTimeString(),
-    user, item, amount,
+    user, item, amount, remark,
     option: OPTION_MAP[item] || "",
     month: monthKey(now)
   };
@@ -621,6 +643,7 @@ function addEntry() {
     showToast("Entry added");
   }
   document.getElementById("amountInput").value = "";
+  document.getElementById("remarkInput").value = "";
   document.getElementById("amountInput").focus();
 }
 
@@ -947,6 +970,55 @@ function renderCharts() {
     });
     userChart._themeColor = textColor;
   }
+
+  // Monthly trend: last 6 months of total spend
+  const trendMonths = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    trendMonths.push(monthKey(d));
+  }
+  const trendTotals = trendMonths.map(m => {
+    return entries
+      .filter(e => entryMonth(e) === m)
+      .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+  });
+  const trendLabels = trendMonths.map(m => {
+    const [y, mo] = m.split("-");
+    return new Date(y, mo - 1, 1).toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+  });
+
+  if (trendChart && trendChart._themeColor === textColor) {
+    trendChart.data.labels = trendLabels;
+    trendChart.data.datasets[0].data = trendTotals;
+    trendChart.update("none");
+  } else {
+    if (trendChart) trendChart.destroy();
+    const trendCtx = document.getElementById("trendChart");
+    trendChart = new Chart(trendCtx, {
+      type: "line",
+      data: {
+        labels: trendLabels,
+        datasets: [{
+          label: "Total spent",
+          data: trendTotals,
+          borderColor: "#2f5d50",
+          backgroundColor: "rgba(47,93,80,0.15)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 4
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: textColor } },
+          y: { ticks: { color: textColor }, beginAtZero: true }
+        }
+      }
+    });
+    trendChart._themeColor = textColor;
+  }
 }
 
 function renderEntries() {
@@ -978,6 +1050,7 @@ function renderEntries() {
       <td>${entry.item}</td>
       <td class="amount-cell">${entry.amount}</td>
       <td>${entry.option ? `<span class="badge ${badgeClass(entry.option)}">${entry.option}</span>` : ""}</td>
+      <td>${entry.remark ? escapeHtml(entry.remark) : ""}</td>
       <td>
         <button class="edit-btn" data-id="${entry.id || ""}" data-index="${realIndex}">Edit</button>
         <button class="delete-btn" data-id="${entry.id || ""}" data-index="${realIndex}">Remove</button>
@@ -1018,8 +1091,8 @@ function csvEscape(value) {
 function downloadCSV() {
   const entries = getFilteredEntries();
   if (entries.length === 0) { showToast("No entries to export.", true); return; }
-  const lines = [["Date","Time","Entered By","Item","Amount","Option"].map(csvEscape).join(",")];
-  entries.forEach(e => lines.push([e.date, e.time, e.user||"", e.item, e.amount, e.option].map(csvEscape).join(",")));
+  const lines = [["Date","Time","Entered By","Item","Amount","Option","Remark"].map(csvEscape).join(",")];
+  entries.forEach(e => lines.push([e.date, e.time, e.user||"", e.item, e.amount, e.option, e.remark||""].map(csvEscape).join(",")));
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1047,13 +1120,112 @@ function downloadXLSX() {
   showToast("Preparing Excel file...");
   ensureXLSXLoaded().then(() => {
     const data = entries.map(e => ({
-      Date: e.date, Time: e.time, "Entered By": e.user || "", Item: e.item, Amount: e.amount, Option: e.option
+      Date: e.date, Time: e.time, "Entered By": e.user || "", Item: e.item, Amount: e.amount, Option: e.option, Remark: e.remark || ""
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Entries");
     XLSX.writeFile(wb, "expense_entries.xlsx");
   }).catch(() => showToast("Could not load Excel export. Check your connection.", true));
+}
+
+/* ---------- PDF Report ---------- */
+let jsPDFLoadPromise = null;
+function ensureJsPDFLoaded() {
+  if (window.jspdf) return Promise.resolve();
+  if (jsPDFLoadPromise) return jsPDFLoadPromise;
+  jsPDFLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+  return jsPDFLoadPromise;
+}
+
+function downloadPDFReport() {
+  const month = currentMonthValue();
+  const entries = loadEntries().filter(e => entryMonth(e) === month);
+  if (entries.length === 0) { showToast("No entries for " + month + " to report.", true); return; }
+
+  showToast("Preparing PDF report...");
+  ensureJsPDFLoaded().then(() => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let y = 18;
+
+    doc.setFontSize(16);
+    doc.text("Expense Report - " + month, 14, y);
+    y += 10;
+
+    doc.setFontSize(11);
+    const totalSpent = entries.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+    doc.text("Total spent: " + totalSpent, 14, y);
+    y += 10;
+
+    // Totals by option
+    doc.setFontSize(13);
+    doc.text("Totals by Option", 14, y);
+    y += 7;
+    doc.setFontSize(10);
+    OPTION_ORDER.forEach(opt => {
+      const sum = entries.filter(e => e.option === opt).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+      doc.text(opt + ": " + sum, 16, y);
+      y += 6;
+    });
+    y += 4;
+
+    // Totals by user
+    doc.setFontSize(13);
+    doc.text("Totals by Person", 14, y);
+    y += 7;
+    doc.setFontSize(10);
+    ["Renu", "Teju"].forEach(u => {
+      const sum = entries.filter(e => e.user === u).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+      doc.text(u + ": " + sum, 16, y);
+      y += 6;
+    });
+    y += 6;
+
+    // Budget vs spent per item
+    doc.setFontSize(13);
+    doc.text("Budget vs Spent by Item", 14, y);
+    y += 7;
+    doc.setFontSize(9);
+    const spentByItem = {};
+    entries.forEach(e => {
+      const amt = parseFloat(e.amount);
+      if (!isNaN(amt)) spentByItem[e.item] = (spentByItem[e.item] || 0) + amt;
+    });
+    ITEMS.forEach(item => {
+      const spent = spentByItem[item];
+      if (!spent) return;
+      const budget = budgetsCache[item] !== undefined ? budgetsCache[item] : null;
+      const line = budget !== null
+        ? `${item}: Budget ${budget}, Spent ${spent}, Remaining ${budget - spent}`
+        : `${item}: Spent ${spent}`;
+      if (y > 280) { doc.addPage(); y = 18; }
+      doc.text(line, 16, y);
+      y += 5.5;
+    });
+
+    // Entry list
+    y += 6;
+    if (y > 270) { doc.addPage(); y = 18; }
+    doc.setFontSize(13);
+    doc.text("All Entries", 14, y);
+    y += 7;
+    doc.setFontSize(8);
+    entries.forEach(e => {
+      if (y > 285) { doc.addPage(); y = 18; }
+      const line = `${e.date} ${e.time} | ${e.user || ""} | ${e.item} | ${e.amount} | ${e.option}${e.remark ? " | " + e.remark : ""}`;
+      doc.text(line, 14, y);
+      y += 5;
+    });
+
+    doc.save(`expense_report_${month}.pdf`);
+  }).catch(() => showToast("Could not load PDF export. Check your connection.", true));
 }
 
 /* ---------- Wire up events ---------- */
@@ -1066,12 +1238,100 @@ function debounce(fn, delay) {
 }
 const debouncedRenderEntries = debounce(renderEntries, 250);
 
+/* ---------- Voice input ---------- */
+function initVoiceInput() {
+  const btn = document.getElementById("voiceBtn");
+  const status = document.getElementById("voiceStatus");
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    btn.disabled = true;
+    btn.title = "Voice input not supported on this browser";
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = "en-IN";
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  let listening = false;
+
+  btn.addEventListener("click", () => {
+    if (listening) { recognition.stop(); return; }
+    try {
+      recognition.start();
+      listening = true;
+      btn.textContent = "🔴";
+      status.textContent = "Listening... say an amount, e.g. \"three hundred\"";
+    } catch (e) {
+      status.textContent = "Could not start microphone.";
+    }
+  });
+
+  recognition.addEventListener("result", (event) => {
+    const transcript = event.results[0][0].transcript;
+    const amount = parseSpokenAmount(transcript);
+    if (amount !== null) {
+      document.getElementById("amountInput").value = amount;
+      status.textContent = `Heard "${transcript}" → set amount to ${amount}`;
+      showToast("Amount set to " + amount);
+    } else {
+      status.textContent = `Heard "${transcript}" but couldn't find a number. Try again.`;
+    }
+  });
+
+  recognition.addEventListener("end", () => {
+    listening = false;
+    btn.textContent = "🎤";
+  });
+
+  recognition.addEventListener("error", (event) => {
+    listening = false;
+    btn.textContent = "🎤";
+    status.textContent = "Mic error: " + event.error;
+  });
+}
+
+function parseSpokenAmount(text) {
+  // First try plain digits, e.g. "300" or "rent 300"
+  const digitMatch = text.match(/[\d,]+(\.\d+)?/);
+  if (digitMatch) {
+    const cleaned = digitMatch[0].replace(/,/g, "");
+    const num = parseFloat(cleaned);
+    if (!isNaN(num)) return num;
+  }
+  // Fallback: parse spoken English number words
+  return wordsToNumber(text);
+}
+
+function wordsToNumber(text) {
+  const words = text.toLowerCase().replace(/-/g, " ").split(/\s+/);
+  const small = { zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9,
+    ten:10, eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17,
+    eighteen:18, nineteen:19, twenty:20, thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90 };
+  const multipliers = { hundred:100, thousand:1000, lakh:100000, lac:100000, million:1000000 };
+
+  let total = 0, current = 0, found = false;
+  words.forEach(word => {
+    if (small[word] !== undefined) { current += small[word]; found = true; }
+    else if (multipliers[word] !== undefined) {
+      current = (current === 0 ? 1 : current) * multipliers[word];
+      if (multipliers[word] >= 1000) { total += current; current = 0; }
+      found = true;
+    }
+  });
+  total += current;
+  return found ? total : null;
+}
+
 function wireEvents() {
   document.getElementById("itemSelect").addEventListener("change", updateOptionPreview);
   document.getElementById("addBtn").addEventListener("click", addEntry);
   document.getElementById("downloadCsvBtn").addEventListener("click", downloadCSV);
   document.getElementById("downloadXlsxBtn").addEventListener("click", downloadXLSX);
+  document.getElementById("downloadPdfBtn").addEventListener("click", downloadPDFReport);
   document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+  initVoiceInput();
 
   document.getElementById("searchInput").addEventListener("input", debouncedRenderEntries);
   ["filterUser","filterOption","filterFrom","filterTo"].forEach(id => {
