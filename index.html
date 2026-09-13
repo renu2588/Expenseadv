@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Expense Transaction Entry</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#2f5d50">
+<meta name="theme-color" content="#7c6fd6">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -18,40 +18,43 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --ink: #1a2723;
-    --paper: #f3f1e9;
+    --ink: #2a2740;
+    --paper: #f4f2fb;
     --card-bg: #ffffff;
-    --line: #e2ddcd;
-    --accent: #2f6d5c;
-    --accent-dark: #1f4d40;
-    --accent-soft: #e7f0ea;
-    --mandatory: #2f6d5c;
-    --nonmandatory: #a17e2e;
-    --timki: #a25a3f;
-    --loan: #7a4272;
-    --saving: #2f5aa8;
-    --muted: #6b7671;
-    --shadow-sm: 0 1px 2px rgba(20,30,25,0.05), 0 1px 3px rgba(20,30,25,0.06);
-    --shadow-md: 0 2px 6px rgba(20,30,25,0.06), 0 10px 28px rgba(20,30,25,0.07);
+    --line: #e1ddf2;
+    --accent: #7c6fd6;
+    --accent-dark: #5b4bc4;
+    --accent-soft: #ece9fa;
+    --mint: #4fd6b8;
+    --mandatory: #7c6fd6;
+    --nonmandatory: #2fa88f;
+    --timki: #e0824a;
+    --loan: #c25b8f;
+    --saving: #4a8fd6;
+    --muted: #726d92;
+    --shadow-sm: 0 1px 2px rgba(45,35,90,0.06), 0 1px 3px rgba(45,35,90,0.07);
+    --shadow-md: 0 2px 8px rgba(45,35,90,0.08), 0 12px 30px rgba(45,35,90,0.10);
   }
   [data-theme="dark"] {
-    --ink: #eef3ef;
-    --paper: #111a16;
-    --card-bg: #182420;
-    --line: #2b3a34;
-    --accent: #5fcba0;
-    --accent-dark: #3f8d70;
-    --accent-soft: #1e3630;
-    --muted: #96a69e;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-    --shadow-md: 0 10px 28px rgba(0,0,0,0.35);
+    --ink: #eeecf9;
+    --paper: #17142b;
+    --card-bg: #211d3a;
+    --line: #362f57;
+    --accent: #a89aef;
+    --accent-dark: #7c6fd6;
+    --accent-soft: #2a2450;
+    --mint: #6fe8cc;
+    --muted: #a89fc9;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
+    --shadow-md: 0 12px 30px rgba(0,0,0,0.4);
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     background:
-      radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 40%),
+      radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 40%),
+      radial-gradient(circle at 90% 100%, color-mix(in srgb, var(--mint) 8%, transparent), transparent 45%),
       var(--paper);
     color: var(--ink);
     padding: 22px 18px 60px;
@@ -63,13 +66,13 @@
     font-weight: 800;
     margin: 0;
     letter-spacing: -0.3px;
-    background: linear-gradient(90deg, var(--accent-dark), var(--accent));
+    background: linear-gradient(90deg, var(--accent-dark), var(--mint));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
   [data-theme="dark"] h1 {
-    background: linear-gradient(90deg, var(--accent), #9be8cd);
+    background: linear-gradient(90deg, var(--accent), var(--mint));
     -webkit-background-clip: text;
     background-clip: text;
   }
@@ -259,6 +262,15 @@
     <button class="icon-btn hidden" id="logoutBtn">Sign Out</button>
   </div>
 </div>
+
+<div class="btn-row" style="max-width:1100px; margin:0 auto 18px auto;">
+  <button class="btn-primary tab-btn" data-tab="expensesTab">Expenses</button>
+  <button class="btn-outline tab-btn" data-tab="bobTab">BOB</button>
+  <button class="btn-outline tab-btn" data-tab="backupTab">Backup</button>
+</div>
+
+<div id="expensesTab" class="tab-page" data-group="expensesTab">
+
 <div class="subtitle">Select an item, enter the amount, and add it to the record.</div>
 
 <div class="card">
@@ -343,6 +355,76 @@
   </table>
 </div>
 
+</div>
+
+<div id="bobTab" class="tab-page hidden" data-group="bobTab">
+
+<div class="card">
+  <div class="row-actions">
+    <h2 style="margin:0;">Linked Account</h2>
+    <span class="status-pill" id="acctBalance">Balance: 0</span>
+  </div>
+  <div class="subtitle" style="margin-bottom:14px;">
+    Loan and Down Payment amounts entered in your monthly budget are automatically added here as Deposits (EMI / Down payment). Use the form below for anything else — manual deposits or withdrawals from this account.
+  </div>
+
+  <div class="form-row">
+    <div class="field">
+      <label for="acctType">Type</label>
+      <select id="acctType">
+        <option value="deposit">Deposit</option>
+        <option value="withdrawal">Withdrawal</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="acctCategory">Category</label>
+      <select id="acctCategory">
+        <option value="EMI">EMI</option>
+        <option value="Down payment">Down payment</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="acctAmount">Amount</label>
+      <input type="number" id="acctAmount" step="any" placeholder="Enter amount">
+    </div>
+    <div class="field">
+      <label for="acctRemark">Remark</label>
+      <input type="text" id="acctRemark" placeholder="optional remark">
+    </div>
+    <div class="field">
+      <button class="btn-primary" id="acctAddBtn">Add</button>
+    </div>
+  </div>
+
+  <div class="btn-row" style="margin:16px 0;">
+    <button class="btn-primary acct-filter-btn" data-filter="all">All</button>
+    <button class="btn-outline acct-filter-btn" data-filter="deposit">Deposits</button>
+    <button class="btn-outline acct-filter-btn" data-filter="withdrawal">Withdrawals</button>
+  </div>
+
+  <div class="table-scroll" style="max-height:400px;">
+    <table id="acctTable">
+      <thead>
+        <tr>
+          <th class="no-sort">Date</th>
+          <th class="no-sort">Time</th>
+          <th class="no-sort">Type</th>
+          <th class="no-sort">Category</th>
+          <th class="no-sort">Amount</th>
+          <th class="no-sort">Remark</th>
+          <th class="no-sort">Source</th>
+        </tr>
+      </thead>
+      <tbody id="acctBody"></tbody>
+    </table>
+  </div>
+</div>
+
+</div>
+
+<div id="expensesTab2" class="tab-page" data-group="expensesTab">
+
 <div class="card">
   <div class="row-actions">
     <h2 style="margin:0;">Saved Entries</h2>
@@ -402,6 +484,38 @@
 
 </div>
 
+<div id="backupTab" class="tab-page hidden" data-group="backupTab">
+
+<div class="card">
+  <h2>Backup Your Data</h2>
+  <div class="subtitle" style="margin-bottom:16px;">
+    Download a single file containing all your Expenses, Monthly Budgets, and BOB (Linked Account) transactions. Keep this file safe — you can use it to restore everything if needed.
+  </div>
+  <button class="btn-primary" id="downloadBackupBtn">Download Backup File</button>
+  <div class="option-preview" id="backupStatus"></div>
+</div>
+
+<div class="card">
+  <h2>Restore From Backup</h2>
+  <div class="subtitle" style="margin-bottom:16px;">
+    Select a previously downloaded backup file to restore your data. This adds the backed-up records back into the app — your current data stays in place, and restored records are merged in alongside it.
+  </div>
+  <div class="form-row">
+    <div class="field">
+      <label for="restoreFileInput">Backup file (.json)</label>
+      <input type="file" id="restoreFileInput" accept="application/json">
+    </div>
+    <div class="field">
+      <button class="btn-primary" id="restoreBackupBtn">Restore</button>
+    </div>
+  </div>
+  <div class="option-preview" id="restoreStatus"></div>
+</div>
+
+</div>
+
+</div>
+
 <script>
 const ITEMS = [
   "Rent","Mobile bill","Internet+DTH","Light Bill","Petrol","Filter","Milk",
@@ -431,8 +545,8 @@ const OPTION_MAP = {
 
 const OPTION_ORDER = ["Mandatory","Non mandatory","Timki","Loan","Saving 1","Saving 2"];
 const OPTION_COLORS = {
-  "Mandatory":"#2f5d50","Non mandatory":"#7a6a3a","Timki":"#7a4a3a",
-  "Loan":"#6a3a5a","Saving 1":"#2f4a6a","Saving 2":"#4a70a8"
+  "Mandatory":"#7c6fd6","Non mandatory":"#2fa88f","Timki":"#e0824a",
+  "Loan":"#c25b8f","Saving 1":"#4a8fd6","Saving 2":"#4fd6b8"
 };
 
 const STORAGE_KEY = "expense_entries_v2";
@@ -567,6 +681,8 @@ function startApp() {
   initFirestore();
   wireEvents();
   initBudgets();
+  initAccountLedger();
+  initBackup();
   renderAll();
 }
 
@@ -780,6 +896,42 @@ function saveBudgets() {
     renderBudgets();
     showToast("Budgets saved for " + month);
   }
+  syncAutoDeposits(month, data);
+}
+
+/* Auto-link Loan -> EMI deposit, Down Payment -> Down payment deposit */
+function syncAutoDeposits(month, budgetData) {
+  const links = [
+    { item: "Loan", category: "EMI", id: `auto_loan_${month}` },
+    { item: "Down Payment", category: "Down payment", id: `auto_downpayment_${month}` }
+  ];
+  links.forEach(link => {
+    const amount = budgetData[link.item];
+    if (amount === undefined || isNaN(amount) || amount <= 0) return;
+    const now = new Date();
+    const txn = {
+      type: "deposit",
+      category: link.category,
+      amount: amount,
+      remark: `Auto-linked from ${link.item} budget (${month})`,
+      date: now.toLocaleDateString(),
+      time: now.toLocaleTimeString(),
+      month: month,
+      source: "auto"
+    };
+    if (firestoreReady) {
+      db.collection("account_transactions").doc(link.id).set({
+        ...txn, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(err => showToast("Could not link " + link.item + ": " + err.message, true));
+    } else {
+      const all = loadAccountTxnsLocal();
+      const idx = all.findIndex(t => t.id === link.id);
+      const record = { ...txn, id: link.id };
+      if (idx >= 0) all[idx] = record; else all.push(record);
+      saveAccountTxnsLocal(all);
+      renderAccountLedger();
+    }
+  });
 }
 
 let budgetTableBuiltForMonth = null;
@@ -866,6 +1018,264 @@ function initBudgets() {
   subscribeBudgets(monthInput.value);
   monthInput.addEventListener("change", () => subscribeBudgets(monthInput.value));
   document.getElementById("saveBudgetsBtn").addEventListener("click", saveBudgets);
+}
+
+/* ---------- Linked Account Ledger ---------- */
+const ACCOUNT_KEY = "expense_account_txns_v1";
+let accountTxnsCache = [];
+let accountFilter = "all"; // all | deposit | withdrawal
+
+function loadAccountTxnsLocal() {
+  try {
+    const raw = localStorage.getItem(ACCOUNT_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+function saveAccountTxnsLocal(list) {
+  localStorage.setItem(ACCOUNT_KEY, JSON.stringify(list));
+}
+
+function loadAccountTxns() {
+  return firestoreReady ? accountTxnsCache : loadAccountTxnsLocal();
+}
+
+function subscribeAccountTxns() {
+  if (!firestoreReady) {
+    accountTxnsCache = loadAccountTxnsLocal();
+    renderAccountLedger();
+    return;
+  }
+  db.collection("account_transactions").orderBy("createdAt", "asc")
+    .onSnapshot((snapshot) => {
+      accountTxnsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderAccountLedger();
+    }, (err) => {
+      showToast("Account sync error: " + err.message, true);
+    });
+}
+
+function addAccountTxn() {
+  const type = document.getElementById("acctType").value;
+  const category = document.getElementById("acctCategory").value;
+  const amount = parseFloat(document.getElementById("acctAmount").value);
+  const remark = document.getElementById("acctRemark").value.trim();
+
+  if (isNaN(amount) || amount <= 0) { showToast("Enter a valid amount.", true); return; }
+
+  const now = new Date();
+  const txn = {
+    type, category, amount, remark,
+    date: now.toLocaleDateString(),
+    time: now.toLocaleTimeString(),
+    month: monthKey(now),
+    source: "manual"
+  };
+
+  if (firestoreReady) {
+    db.collection("account_transactions").add({ ...txn, createdAt: firebase.firestore.FieldValue.serverTimestamp() })
+      .then(() => showToast(type === "deposit" ? "Deposit added" : "Withdrawal added"))
+      .catch(err => showToast("Could not save: " + err.message, true));
+  } else {
+    const list = loadAccountTxnsLocal();
+    list.push({ ...txn, id: "local_" + Date.now() });
+    saveAccountTxnsLocal(list);
+    renderAccountLedger();
+    showToast(type === "deposit" ? "Deposit added" : "Withdrawal added");
+  }
+  document.getElementById("acctAmount").value = "";
+  document.getElementById("acctRemark").value = "";
+}
+
+function deleteAccountTxn(id) {
+  if (firestoreReady) {
+    db.collection("account_transactions").doc(id).delete()
+      .then(() => showToast("Transaction removed"))
+      .catch(err => showToast("Could not delete: " + err.message, true));
+  } else {
+    const list = loadAccountTxnsLocal().filter(t => t.id !== id);
+    saveAccountTxnsLocal(list);
+    renderAccountLedger();
+    showToast("Transaction removed");
+  }
+}
+
+function renderAccountLedger() {
+  const all = loadAccountTxns();
+  const deposits = all.filter(t => t.type === "deposit").reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+  const withdrawals = all.filter(t => t.type === "withdrawal").reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+  const balance = deposits - withdrawals;
+
+  const balanceEl = document.getElementById("acctBalance");
+  if (balanceEl) balanceEl.textContent = "Balance: " + balance;
+
+  const filtered = accountFilter === "all" ? all : all.filter(t => t.type === accountFilter);
+  const tbody = document.getElementById("acctBody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-msg">No transactions yet.</td></tr>`;
+    return;
+  }
+
+  filtered.slice().reverse().forEach(t => {
+    const tr = document.createElement("tr");
+    const typeBadgeClass = t.type === "deposit" ? "badge-nonmandatory" : "badge-timki";
+    tr.innerHTML = `
+      <td>${t.date}</td>
+      <td>${t.time}</td>
+      <td><span class="badge ${typeBadgeClass}">${t.type === "deposit" ? "Deposit" : "Withdrawal"}</span></td>
+      <td>${t.category || ""}</td>
+      <td>${t.amount}</td>
+      <td>${t.remark ? escapeHtml(t.remark) : ""}</td>
+      <td>${t.source === "auto" ? "Auto" : "Manual"} ${t.source !== "auto" ? `<button class="delete-btn" data-id="${t.id}">Remove</button>` : ""}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll(".delete-btn").forEach(btn => {
+    btn.addEventListener("click", () => deleteAccountTxn(btn.dataset.id));
+  });
+}
+
+function initAccountLedger() {
+  subscribeAccountTxns();
+  document.getElementById("acctAddBtn").addEventListener("click", addAccountTxn);
+  document.querySelectorAll(".acct-filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      accountFilter = btn.dataset.filter;
+      document.querySelectorAll(".acct-filter-btn").forEach(b => b.classList.remove("btn-primary"));
+      document.querySelectorAll(".acct-filter-btn").forEach(b => b.classList.add("btn-outline"));
+      btn.classList.remove("btn-outline");
+      btn.classList.add("btn-primary");
+      renderAccountLedger();
+    });
+  });
+}
+
+/* ---------- Backup & Restore ---------- */
+function fetchAllBudgets() {
+  if (firestoreReady) {
+    return db.collection("budgets").get().then(snapshot => {
+      const all = {};
+      snapshot.forEach(doc => { all[doc.id] = doc.data(); });
+      return all;
+    });
+  }
+  try {
+    const raw = localStorage.getItem(BUDGETS_KEY);
+    return Promise.resolve(raw ? JSON.parse(raw) : {});
+  } catch (e) { return Promise.resolve({}); }
+}
+
+function downloadBackup() {
+  const status = document.getElementById("backupStatus");
+  status.textContent = "Preparing backup...";
+
+  Promise.all([
+    Promise.resolve(loadEntries()),
+    fetchAllBudgets(),
+    Promise.resolve(loadAccountTxns())
+  ]).then(([entries, budgets, accountTxns]) => {
+    const backup = {
+      exportedAt: new Date().toISOString(),
+      entries,
+      budgets,
+      accountTxns
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `expense_backup_${dateStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    status.textContent = "Backup downloaded: " + a.download;
+    showToast("Backup downloaded");
+  }).catch(err => {
+    status.textContent = "Backup failed: " + err.message;
+    showToast("Backup failed: " + err.message, true);
+  });
+}
+
+function restoreBackup() {
+  const fileInput = document.getElementById("restoreFileInput");
+  const status = document.getElementById("restoreStatus");
+  const file = fileInput.files[0];
+  if (!file) { status.textContent = "Choose a backup file first."; return; }
+
+  status.textContent = "Reading file...";
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    let backup;
+    try {
+      backup = JSON.parse(e.target.result);
+    } catch (err) {
+      status.textContent = "This doesn't look like a valid backup file.";
+      return;
+    }
+
+    const entries = Array.isArray(backup.entries) ? backup.entries : [];
+    const budgets = backup.budgets && typeof backup.budgets === "object" ? backup.budgets : {};
+    const accountTxns = Array.isArray(backup.accountTxns) ? backup.accountTxns : [];
+
+    status.textContent = `Restoring ${entries.length} entries, ${Object.keys(budgets).length} months of budgets, ${accountTxns.length} account transactions...`;
+
+    const tasks = [];
+
+    if (firestoreReady) {
+      entries.forEach(entry => {
+        const { id, ...data } = entry;
+        const ref = id ? db.collection("entries").doc(id) : db.collection("entries").doc();
+        tasks.push(ref.set({ ...data, createdAt: data.createdAt || firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }));
+      });
+      Object.keys(budgets).forEach(month => {
+        tasks.push(db.collection("budgets").doc(month).set(budgets[month], { merge: true }));
+      });
+      accountTxns.forEach(txn => {
+        const { id, ...data } = txn;
+        const ref = id ? db.collection("account_transactions").doc(id) : db.collection("account_transactions").doc();
+        tasks.push(ref.set({ ...data, createdAt: data.createdAt || firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }));
+      });
+    } else {
+      const existingEntries = loadEntries();
+      const existingIds = new Set(existingEntries.map(e => e.id).filter(Boolean));
+      entries.forEach(entry => { if (!entry.id || !existingIds.has(entry.id)) existingEntries.push(entry); });
+      saveEntriesLocal(existingEntries);
+
+      try {
+        const raw = localStorage.getItem(BUDGETS_KEY);
+        const allBudgets = raw ? JSON.parse(raw) : {};
+        Object.keys(budgets).forEach(month => { allBudgets[month] = { ...(allBudgets[month] || {}), ...budgets[month] }; });
+        localStorage.setItem(BUDGETS_KEY, JSON.stringify(allBudgets));
+      } catch (e) {}
+
+      const existingTxns = loadAccountTxnsLocal();
+      const existingTxnIds = new Set(existingTxns.map(t => t.id).filter(Boolean));
+      accountTxns.forEach(txn => { if (!txn.id || !existingTxnIds.has(txn.id)) existingTxns.push(txn); });
+      saveAccountTxnsLocal(existingTxns);
+
+      renderAll();
+      renderAccountLedger();
+    }
+
+    Promise.all(tasks).then(() => {
+      status.textContent = "Restore complete.";
+      showToast("Backup restored successfully");
+    }).catch(err => {
+      status.textContent = "Some records failed to restore: " + err.message;
+      showToast("Restore had errors: " + err.message, true);
+    });
+  };
+  reader.readAsText(file);
+}
+
+function initBackup() {
+  document.getElementById("downloadBackupBtn").addEventListener("click", downloadBackup);
+  document.getElementById("restoreBackupBtn").addEventListener("click", restoreBackup);
 }
 
 /* ---------- Rendering ---------- */
@@ -958,7 +1368,7 @@ function renderCharts() {
       type: "bar",
       data: {
         labels: userLabels,
-        datasets: [{ label: "Total", data: userData, backgroundColor: ["#2f5d50", "#4a70a8"] }]
+        datasets: [{ label: "Total", data: userData, backgroundColor: ["#7c6fd6", "#4fd6b8"] }]
       },
       options: {
         plugins: { legend: { display: false } },
@@ -1002,8 +1412,8 @@ function renderCharts() {
         datasets: [{
           label: "Total spent",
           data: trendTotals,
-          borderColor: "#2f5d50",
-          backgroundColor: "rgba(47,93,80,0.15)",
+          borderColor: "#7c6fd6",
+          backgroundColor: "rgba(124,111,214,0.15)",
           fill: true,
           tension: 0.3,
           pointRadius: 4
@@ -1324,7 +1734,27 @@ function wordsToNumber(text) {
   return found ? total : null;
 }
 
+function switchTab(tabId) {
+  document.querySelectorAll(".tab-page").forEach(el => {
+    el.classList.toggle("hidden", el.dataset.group !== tabId);
+  });
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    const isActive = btn.dataset.tab === tabId;
+    btn.classList.toggle("btn-primary", isActive);
+    btn.classList.toggle("btn-outline", !isActive);
+  });
+  if (tabId === "bobTab") renderAccountLedger();
+}
+
+function initTabs() {
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+  });
+  switchTab("expensesTab");
+}
+
 function wireEvents() {
+  initTabs();
   document.getElementById("itemSelect").addEventListener("change", updateOptionPreview);
   document.getElementById("addBtn").addEventListener("click", addEntry);
   document.getElementById("downloadCsvBtn").addEventListener("click", downloadCSV);
