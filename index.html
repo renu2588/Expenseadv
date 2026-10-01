@@ -343,7 +343,23 @@
     <button class="btn-outline" id="downloadPdfBtn">Download PDF Report</button>
     <span class="option-preview" id="budgetStatus" style="margin-top:0;"></span>
   </div>
-  <div class="table-scroll" style="max-height:400px;">
+
+  <div class="subtotal-bar" style="flex-direction:column; gap:10px; align-items:stretch;">
+    <div style="display:flex; justify-content:space-between;">
+      <span>Total Monthly Income</span>
+      <b id="summaryIncome">0</b>
+    </div>
+    <div style="display:flex; justify-content:space-between;">
+      <span>Budget (Allocated)</span>
+      <b id="summaryBudget">0</b>
+    </div>
+    <div style="display:flex; justify-content:space-between; border-top:1px solid var(--line); padding-top:8px;">
+      <span>Balance (Pending Allocation)</span>
+      <b id="summaryBalance">0</b>
+    </div>
+  </div>
+
+  <div class="table-scroll" style="max-height:400px; margin-top:16px;">
     <table id="budgetTable">
       <thead><tr><th class="no-sort">Item</th><th class="no-sort">Budget</th><th class="no-sort">Spent</th><th class="no-sort">Remaining</th></tr></thead>
       <tbody id="budgetBody"></tbody>
@@ -1081,6 +1097,35 @@ function renderBudgets() {
     `;
     optBody.appendChild(tr);
   });
+
+  updateBudgetSummary();
+}
+
+function updateBudgetSummary() {
+  const month = currentMonthValue();
+  const tbody = document.getElementById("budgetBody");
+
+  const totalBudget = ITEMS.reduce((sum, item) => {
+    const tr = tbody.querySelector(`tr[data-item="${CSS.escape(item)}"]`);
+    const inputVal = tr ? tr.querySelector(".budget-input").value : "";
+    return sum + (inputVal === "" ? 0 : parseFloat(inputVal) || 0);
+  }, 0);
+
+  const totalIncome = loadIncome()
+    .filter(i => i.month === month)
+    .reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+
+  const balance = totalIncome - totalBudget;
+
+  const incomeEl = document.getElementById("summaryIncome");
+  const budgetEl = document.getElementById("summaryBudget");
+  const balanceEl = document.getElementById("summaryBalance");
+  if (incomeEl) incomeEl.textContent = totalIncome;
+  if (budgetEl) budgetEl.textContent = totalBudget;
+  if (balanceEl) {
+    balanceEl.textContent = balance;
+    balanceEl.className = balance < 0 ? "remaining-over" : "remaining-ok";
+  }
 }
 
 function initBudgets() {
@@ -1095,6 +1140,11 @@ function initBudgets() {
     renderEntries();
   });
   document.getElementById("saveBudgetsBtn").addEventListener("click", saveBudgets);
+
+  // Live-update the income/budget/balance summary as the user types a budget value
+  document.getElementById("budgetBody").addEventListener("input", (e) => {
+    if (e.target.classList.contains("budget-input")) updateBudgetSummary();
+  });
 }
 
 /* ---------- Linked Account Ledger ---------- */
@@ -1385,12 +1435,14 @@ function subscribeIncome() {
   if (!firestoreReady) {
     incomeCache = loadIncomeLocal();
     renderIncome();
+    updateBudgetSummary();
     return;
   }
   db.collection("income").orderBy("createdAt", "asc")
     .onSnapshot((snapshot) => {
       incomeCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       renderIncome();
+      updateBudgetSummary();
     }, (err) => {
       showToast("Income sync error: " + err.message, true);
     });
@@ -1429,6 +1481,7 @@ function addIncome() {
     list.push({ ...record, id: "local_" + Date.now() });
     saveIncomeLocal(list);
     renderIncome();
+    updateBudgetSummary();
     showToast("Income added");
   }
   document.getElementById("incomeAmount").value = "";
@@ -1443,6 +1496,7 @@ function deleteIncome(id) {
     const list = loadIncomeLocal().filter(i => i.id !== id);
     saveIncomeLocal(list);
     renderIncome();
+    updateBudgetSummary();
     showToast("Income entry removed");
   }
 }
