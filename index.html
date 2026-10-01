@@ -265,6 +265,7 @@
 
 <div class="btn-row" style="max-width:1100px; margin:0 auto 18px auto;">
   <button class="btn-primary tab-btn" data-tab="expensesTab">Expenses</button>
+  <button class="btn-outline tab-btn" data-tab="incomeTab">Income</button>
   <button class="btn-outline tab-btn" data-tab="bobTab">BOB</button>
   <button class="btn-outline tab-btn" data-tab="backupTab">Backup</button>
 </div>
@@ -484,6 +485,73 @@
 
 </div>
 
+<div id="incomeTab" class="tab-page hidden" data-group="incomeTab">
+
+<div class="card">
+  <div class="row-actions">
+    <h2 style="margin:0;">Add Income</h2>
+    <div class="field" style="margin:0;">
+      <label for="incomeMonth">Viewing Month</label>
+      <input type="month" id="incomeMonth">
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="field">
+      <label for="incomeUser">User</label>
+      <select id="incomeUser">
+        <option value="Renu">Renu</option>
+        <option value="Teju">Teju</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="incomeSource">Source</label>
+      <select id="incomeSource">
+        <option value="Salary">Salary</option>
+        <option value="Others">Others</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="incomeAmount">Amount</label>
+      <input type="number" id="incomeAmount" step="any" placeholder="Enter amount">
+    </div>
+    <div class="field">
+      <label for="incomeDate">Date</label>
+      <input type="date" id="incomeDate">
+    </div>
+    <div class="field">
+      <button class="btn-primary" id="incomeAddBtn">Add Income</button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row-actions">
+    <h2 style="margin:0;">Income <span id="incomeMonthLabel" class="status-pill"></span></h2>
+    <span class="status-pill" id="incomeTotalPill">Total: 0</span>
+  </div>
+  <table id="incomeUserTotalsTable" style="margin-bottom:16px;">
+    <thead><tr><th class="no-sort">User</th><th class="no-sort">Total</th></tr></thead>
+    <tbody id="incomeUserTotalsBody"></tbody>
+  </table>
+  <div class="table-scroll" style="max-height:400px;">
+    <table id="incomeTable">
+      <thead>
+        <tr>
+          <th class="no-sort">Date</th>
+          <th class="no-sort">User</th>
+          <th class="no-sort">Source</th>
+          <th class="no-sort">Amount</th>
+          <th class="no-sort"></th>
+        </tr>
+      </thead>
+      <tbody id="incomeBody"></tbody>
+    </table>
+  </div>
+  <div id="incomeEmptyMsg" class="empty-msg">No income recorded for this month yet.</div>
+</div>
+
+</div>
+
 <div id="backupTab" class="tab-page hidden" data-group="backupTab">
 
 <div class="card">
@@ -682,6 +750,7 @@ function startApp() {
   wireEvents();
   initBudgets();
   initAccountLedger();
+  initIncome();
   initBackup();
   renderAll();
 }
@@ -1183,13 +1252,15 @@ function downloadBackup() {
   Promise.all([
     Promise.resolve(loadEntries()),
     fetchAllBudgets(),
-    Promise.resolve(loadAccountTxns())
-  ]).then(([entries, budgets, accountTxns]) => {
+    Promise.resolve(loadAccountTxns()),
+    Promise.resolve(loadIncome())
+  ]).then(([entries, budgets, accountTxns, income]) => {
     const backup = {
       exportedAt: new Date().toISOString(),
       entries,
       budgets,
-      accountTxns
+      accountTxns,
+      income
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -1229,8 +1300,9 @@ function restoreBackup() {
     const entries = Array.isArray(backup.entries) ? backup.entries : [];
     const budgets = backup.budgets && typeof backup.budgets === "object" ? backup.budgets : {};
     const accountTxns = Array.isArray(backup.accountTxns) ? backup.accountTxns : [];
+    const income = Array.isArray(backup.income) ? backup.income : [];
 
-    status.textContent = `Restoring ${entries.length} entries, ${Object.keys(budgets).length} months of budgets, ${accountTxns.length} account transactions...`;
+    status.textContent = `Restoring ${entries.length} entries, ${Object.keys(budgets).length} months of budgets, ${accountTxns.length} account transactions, ${income.length} income records...`;
 
     const tasks = [];
 
@@ -1246,6 +1318,11 @@ function restoreBackup() {
       accountTxns.forEach(txn => {
         const { id, ...data } = txn;
         const ref = id ? db.collection("account_transactions").doc(id) : db.collection("account_transactions").doc();
+        tasks.push(ref.set({ ...data, createdAt: data.createdAt || firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }));
+      });
+      income.forEach(rec => {
+        const { id, ...data } = rec;
+        const ref = id ? db.collection("income").doc(id) : db.collection("income").doc();
         tasks.push(ref.set({ ...data, createdAt: data.createdAt || firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }));
       });
     } else {
@@ -1266,8 +1343,14 @@ function restoreBackup() {
       accountTxns.forEach(txn => { if (!txn.id || !existingTxnIds.has(txn.id)) existingTxns.push(txn); });
       saveAccountTxnsLocal(existingTxns);
 
+      const existingIncome = loadIncomeLocal();
+      const existingIncomeIds = new Set(existingIncome.map(i => i.id).filter(Boolean));
+      income.forEach(rec => { if (!rec.id || !existingIncomeIds.has(rec.id)) existingIncome.push(rec); });
+      saveIncomeLocal(existingIncome);
+
       renderAll();
       renderAccountLedger();
+      renderIncome();
     }
 
     Promise.all(tasks).then(() => {
@@ -1279,6 +1362,158 @@ function restoreBackup() {
     });
   };
   reader.readAsText(file);
+}
+
+/* ---------- Income ---------- */
+const INCOME_KEY = "expense_income_v1";
+let incomeCache = [];
+
+function loadIncomeLocal() {
+  try {
+    const raw = localStorage.getItem(INCOME_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+function saveIncomeLocal(list) {
+  localStorage.setItem(INCOME_KEY, JSON.stringify(list));
+}
+function loadIncome() {
+  return firestoreReady ? incomeCache : loadIncomeLocal();
+}
+
+function subscribeIncome() {
+  if (!firestoreReady) {
+    incomeCache = loadIncomeLocal();
+    renderIncome();
+    return;
+  }
+  db.collection("income").orderBy("createdAt", "asc")
+    .onSnapshot((snapshot) => {
+      incomeCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderIncome();
+    }, (err) => {
+      showToast("Income sync error: " + err.message, true);
+    });
+}
+
+function currentIncomeMonthValue() {
+  const el = document.getElementById("incomeMonth");
+  return el.value || monthKey(new Date());
+}
+
+function addIncome() {
+  const user = document.getElementById("incomeUser").value;
+  const source = document.getElementById("incomeSource").value;
+  const amount = parseFloat(document.getElementById("incomeAmount").value);
+  const dateVal = document.getElementById("incomeDate").value;
+
+  if (isNaN(amount) || amount <= 0) { showToast("Enter a valid amount.", true); return; }
+  if (!dateVal) { showToast("Pick a date.", true); return; }
+
+  const chosenDate = new Date(dateVal + "T00:00:00");
+  const now = new Date();
+  const record = {
+    user, source, amount,
+    date: chosenDate.toLocaleDateString(),
+    time: now.toLocaleTimeString(),
+    month: monthKey(chosenDate),
+    source_type: "manual"
+  };
+
+  if (firestoreReady) {
+    db.collection("income").add({ ...record, createdAt: firebase.firestore.FieldValue.serverTimestamp() })
+      .then(() => showToast("Income added"))
+      .catch(err => showToast("Could not save: " + err.message, true));
+  } else {
+    const list = loadIncomeLocal();
+    list.push({ ...record, id: "local_" + Date.now() });
+    saveIncomeLocal(list);
+    renderIncome();
+    showToast("Income added");
+  }
+  document.getElementById("incomeAmount").value = "";
+}
+
+function deleteIncome(id) {
+  if (firestoreReady) {
+    db.collection("income").doc(id).delete()
+      .then(() => showToast("Income entry removed"))
+      .catch(err => showToast("Could not delete: " + err.message, true));
+  } else {
+    const list = loadIncomeLocal().filter(i => i.id !== id);
+    saveIncomeLocal(list);
+    renderIncome();
+    showToast("Income entry removed");
+  }
+}
+
+function renderIncome() {
+  const month = currentIncomeMonthValue();
+  const monthLabel = document.getElementById("incomeMonthLabel");
+  if (monthLabel) monthLabel.textContent = month;
+
+  const all = loadIncome();
+  const filtered = all.filter(i => i.month === month);
+
+  const totals = { "Renu": 0, "Teju": 0 };
+  let grandTotal = 0;
+  filtered.forEach(i => {
+    const amt = parseFloat(i.amount) || 0;
+    grandTotal += amt;
+    if (i.user) totals[i.user] = (totals[i.user] || 0) + amt;
+  });
+
+  const totalPill = document.getElementById("incomeTotalPill");
+  if (totalPill) totalPill.textContent = "Total: " + grandTotal;
+
+  const userTbody = document.getElementById("incomeUserTotalsBody");
+  if (userTbody) {
+    userTbody.innerHTML = "";
+    Object.keys(totals).forEach(u => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${u}</td><td>${totals[u]}</td>`;
+      userTbody.appendChild(tr);
+    });
+  }
+
+  const tbody = document.getElementById("incomeBody");
+  const emptyMsg = document.getElementById("incomeEmptyMsg");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  if (filtered.length === 0) {
+    emptyMsg.style.display = "block";
+    return;
+  }
+  emptyMsg.style.display = "none";
+
+  filtered.slice().reverse().forEach(i => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${i.date}</td>
+      <td>${i.user || ""}</td>
+      <td>${i.source || ""}</td>
+      <td>${i.amount}</td>
+      <td><button class="delete-btn" data-id="${i.id}">Remove</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll(".delete-btn").forEach(btn => {
+    btn.addEventListener("click", () => deleteIncome(btn.dataset.id));
+  });
+}
+
+function initIncome() {
+  const monthInput = document.getElementById("incomeMonth");
+  const dateInput = document.getElementById("incomeDate");
+  const today = new Date();
+  monthInput.value = monthKey(today);
+  dateInput.value = today.toISOString().slice(0, 10);
+
+  subscribeIncome();
+  monthInput.addEventListener("change", renderIncome);
+  document.getElementById("incomeAddBtn").addEventListener("click", addIncome);
 }
 
 function initBackup() {
@@ -1764,6 +1999,7 @@ function switchTab(tabId) {
     btn.classList.toggle("btn-outline", !isActive);
   });
   if (tabId === "bobTab") renderAccountLedger();
+  if (tabId === "incomeTab") renderIncome();
 }
 
 function initTabs() {
