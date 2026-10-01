@@ -307,7 +307,7 @@
 
 <div class="grid-2">
   <div class="card">
-    <h2>Totals by Option</h2>
+    <h2>Totals by Option <span id="optionMonthLabel" class="status-pill" style="font-size:0.7rem;"></span></h2>
     <div class="chart-wrap"><canvas id="optionChart"></canvas></div>
     <table id="totalsTable" style="margin-top:14px;">
       <thead><tr><th class="no-sort">Option</th><th class="no-sort">Total</th></tr></thead>
@@ -315,7 +315,7 @@
     </table>
   </div>
   <div class="card">
-    <h2>Totals by User</h2>
+    <h2>Totals by User <span id="userMonthLabel" class="status-pill" style="font-size:0.7rem;"></span></h2>
     <div class="chart-wrap"><canvas id="userChart"></canvas></div>
     <table id="userTotalsTable" style="margin-top:14px;">
       <thead><tr><th class="no-sort">User</th><th class="no-sort">Total</th></tr></thead>
@@ -800,7 +800,9 @@ function getFilteredEntries() {
   const from = document.getElementById("filterFrom").value;
   const to = document.getElementById("filterTo").value;
 
+  const selectedMonth = currentMonthValue();
   let entries = loadEntries().filter(e => {
+    if (entryMonth(e) !== selectedMonth) return false;
     if (search && !e.item.toLowerCase().includes(search)) return false;
     if (userF && e.user !== userF) return false;
     if (optF && e.option !== optF) return false;
@@ -1016,7 +1018,13 @@ function initBudgets() {
   const monthInput = document.getElementById("budgetMonth");
   monthInput.value = monthKey(new Date());
   subscribeBudgets(monthInput.value);
-  monthInput.addEventListener("change", () => subscribeBudgets(monthInput.value));
+  monthInput.addEventListener("change", () => {
+    subscribeBudgets(monthInput.value);
+    renderTotals();
+    renderUserTotals();
+    renderCharts();
+    renderEntries();
+  });
   document.getElementById("saveBudgetsBtn").addEventListener("click", saveBudgets);
 }
 
@@ -1287,8 +1295,15 @@ function renderAll() {
   renderBudgets();
 }
 
+function getEntriesForSelectedMonth() {
+  const month = currentMonthValue();
+  return loadEntries().filter(e => entryMonth(e) === month);
+}
+
 function renderTotals() {
-  const entries = loadEntries();
+  const monthLabel = document.getElementById("optionMonthLabel");
+  if (monthLabel) monthLabel.textContent = currentMonthValue();
+  const entries = getEntriesForSelectedMonth();
   const totals = {};
   OPTION_ORDER.forEach(opt => totals[opt] = 0);
   entries.forEach(e => {
@@ -1306,7 +1321,9 @@ function renderTotals() {
 }
 
 function renderUserTotals() {
-  const entries = loadEntries();
+  const monthLabel = document.getElementById("userMonthLabel");
+  if (monthLabel) monthLabel.textContent = currentMonthValue();
+  const entries = getEntriesForSelectedMonth();
   const totals = { "Renu": 0, "Teju": 0 };
   entries.forEach(e => {
     const amt = parseFloat(e.amount);
@@ -1323,7 +1340,8 @@ function renderUserTotals() {
 }
 
 function renderCharts() {
-  const entries = loadEntries();
+  const allEntries = loadEntries();
+  const entries = getEntriesForSelectedMonth();
   const optTotals = {};
   OPTION_ORDER.forEach(o => optTotals[o] = 0);
   const userTotals = { "Renu": 0, "Teju": 0 };
@@ -1389,7 +1407,7 @@ function renderCharts() {
     trendMonths.push(monthKey(d));
   }
   const trendTotals = trendMonths.map(m => {
-    return entries
+    return allEntries
       .filter(e => entryMonth(e) === m)
       .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
   });
@@ -1432,7 +1450,9 @@ function renderCharts() {
 }
 
 function renderEntries() {
+  const selectedMonth = currentMonthValue();
   const allEntries = loadEntries();
+  const monthEntries = getEntriesForSelectedMonth();
   const filtered = getFilteredEntries();
   const tbody = document.getElementById("recordsBody");
   const emptyMsg = document.getElementById("emptyMsg");
@@ -1441,11 +1461,11 @@ function renderEntries() {
   // subtotal bar
   const subtotalBar = document.getElementById("subtotalBar");
   const sum = filtered.reduce((acc, e) => acc + (parseFloat(e.amount) || 0), 0);
-  subtotalBar.innerHTML = `<span>Showing <b>${filtered.length}</b> of <b>${allEntries.length}</b> entries</span><span>Subtotal: <b>${sum}</b></span>`;
+  subtotalBar.innerHTML = `<span>Viewing <b>${selectedMonth}</b> — showing <b>${filtered.length}</b> of <b>${monthEntries.length}</b> entries for this month</span><span>Subtotal: <b>${sum}</b></span>`;
 
   if (filtered.length === 0) {
     emptyMsg.style.display = "block";
-    emptyMsg.textContent = allEntries.length === 0 ? "No entries saved yet." : "No entries match the current filters.";
+    emptyMsg.textContent = monthEntries.length === 0 ? "No entries saved for " + selectedMonth + " yet." : "No entries match the current filters.";
     return;
   }
   emptyMsg.style.display = "none";
